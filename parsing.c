@@ -25,7 +25,7 @@ long ft_atoi(const char *str)
     i = 0;
     sign = 1;
     while((str[i] >= 9 && str[i] <= 13) || str[i] == 32)
-    i++;
+        i++;
     if (str[i] == '+' || str[i] == '-')
 	{
 		if (str[i] == '-')
@@ -38,11 +38,11 @@ long ft_atoi(const char *str)
 	{
         if (!(str[i] >= '0' && str[i] <= '9'))
             return -1;
-            result = result * 10 + (str[i] - '0');
-            i++;
-        }
-        return (sign * result);
+        result = result * 10 + (str[i] - '0');
+        i++;
     }
+    return (sign * result);
+}
     
     int syntax_check(const char* str)
     {
@@ -64,13 +64,23 @@ long ft_atoi(const char *str)
 
 void ft_data(t_scheduler *data,char **arg)
 {
+    // printf("it go here\n");
     data->number_of_coders = ft_atoi(arg[1]);
     data->time_to_burnout = ft_atoi(arg[2]);
     data->time_to_compile = ft_atoi(arg[3]);
     data->time_to_debug = ft_atoi(arg[4]);
     data->time_to_refactor = ft_atoi(arg[5]);
-    data->dongle_cooldown = ft_atoi(arg[6]);
-    data->number_of_compiles_required = ft_atoi(arg[7]);
+    data->number_of_compiles_required = ft_atoi(arg[6]);
+    data->dongle_cooldown = ft_atoi(arg[7]);
+    // printf("it go here3\n");
+    // if (strcmp(arg[7], "edf") == 0)
+    // {
+    //     data->is_edf = 1;
+    // }
+    // else
+    // {
+    //     data->is_edf = 0;
+    // }
     
 
 }
@@ -94,12 +104,13 @@ int ft_check_parameter(char *arg)
 }
 int main(int arg, char **argc)
 {
+    
     if ((arg < 2) || (arg > 8))
     {
         printf("Please enter the argument");
         return(1);
     }
-    int i = 1, j = 0,check_error=0;
+    int i = 1, j = 0;
     int boolin, num;
     char *args;
     while(i < arg)
@@ -108,8 +119,8 @@ int main(int arg, char **argc)
         if (!args)
             return 1;
         j = 0;
-        printf("i :%d,j:%d\n",i,j);
-        while(args[j] && (i != 7))
+        // printf("i :%d,j:%d\n",i,j);
+        while(args[j])
         {
             
             boolin = syntax_check(&args[j]);
@@ -133,24 +144,17 @@ int main(int arg, char **argc)
             }
             j++;
         }
-        if (i == 7)
-        {
-            check_error = ft_check_parameter(&args[j]);
-            if (check_error != 0)
-            {
-                write(2, "Error\n", 6);
-                return 1;
-            }
-            else
-            {
-                t_scheduler *data;
-                data->number_of_compiles_required = args[j];
-            }
-        }
+        // if (ft_check_parameter(argc[7]) != 0)
+        // {
+        //     write(2, "Error\n", 6);
+        //     return (1);
+        // }
         i++;
     }
+    // printf("it go here\n");
     t_scheduler data;
     ft_data(&data,argc);
+    // printf("4it go here\n");
     main_thread(&data);
     return 0;
 }    

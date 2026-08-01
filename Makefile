@@ -1,7 +1,7 @@
-NAME = test
+NAME = codexion
 CC = cc
 CFLAGS = -Wall -Wextra -Werror
-SRC = parsing.c threades.c
+SRC = parsing.c thread.c
 OBJ = $(SRC:.c=.o)
 
 all: $(NAME)
