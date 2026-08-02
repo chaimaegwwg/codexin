@@ -28,11 +28,14 @@ typedef struct s_scheduler
 typedef struct s_coder_context
 {
     t_scheduler *data; 
-    int         id; 
+    int    id; 
     long last_com_time;
     long count_comp;
-    long            request_time;     
-    int             is_waiting;
+    long  request_time;     
+    int  is_waiting;
+    int is_cooldown;
+    long long start_cooldown; 
+    int check_cooldown ;
     
 } t_coder_context;
 int main_thread(t_scheduler *data);

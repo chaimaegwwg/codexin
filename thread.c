@@ -21,6 +21,19 @@ long ft_time_opt(long time)
     time_now = ft_time() - time;
     return time_now;
 }
+void pre_usleep(long long time_to_sleep)
+{
+    long long start = ft_time();
+    // time_to_sleep = ft_time_opt()
+    // printf("hello %lld time :%lld      , start is : %lld\n",(ft_time() +  time_to_sleep ),ft_time(), start);
+    while(ft_time() - start <  time_to_sleep)
+    {
+        // printf("ji %lld time : %lld \n",ft_time() - start, time_to_sleep);
+        // printf("hello %ld time :%ld      \n",ft_time_opt(ft_time() - start) ,ft_time_opt(time_to_sleep));
+        // pthread_mutex_unlock(&lock);
+        usleep(500);
+    }
+}
 void* ft_check_burnout(void*arg)
 {
     // t_scheduler *data;
@@ -44,6 +57,15 @@ void* ft_check_burnout(void*arg)
             {
                 printf("time: %ld, id : %d bornout\n",ft_time_opt(cnx[0].data->start_time),cnx[i].id+1);
                 exit(0);
+            }
+            if ((cnx[i].is_cooldown) && !(ft_time() - cnx[i].start_cooldown < cnx[i].data->dongle_cooldown))
+            {
+                cnx[i].is_cooldown = 0;
+                cnx[i].check_cooldown = 1;
+            }
+            else
+            {
+                cnx[i].check_cooldown = 0;
             }
             if (cnx[i].count_comp >= cnx[i].data->number_of_compiles_required)
                 full_coders++;
@@ -69,6 +91,7 @@ int is_neighbor_eligible(t_scheduler *data, int neighbor_id, int num)
         return (1);
     return (0); 
 }
+
 int can_i_compile_edf(t_coder_context *all_coders, int id, int num)
 {
     t_scheduler *data = all_coders[id].data;
@@ -77,8 +100,12 @@ int can_i_compile_edf(t_coder_context *all_coders, int id, int num)
 
     int left_neighbor = (id + num - 1) % num;
     int right_neighbor = (id + 1) % num;
-    // if (num <= 1)
-    //     return (0);
+    
+    if (left_dongle == right_dongle)
+    {
+        printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
+        return (0);
+    }
 
     if (data->usb[left_dongle] != 1 || data->usb[right_dongle] != 1)
         return (0);
@@ -96,48 +123,69 @@ int can_i_compile_edf(t_coder_context *all_coders, int id, int num)
 
     if (all_coders[right_neighbor].is_waiting)
     {
-        if (all_coders[right_neighbor].last_com_time < all_coders[id].last_com_time)
-            return (0);
+        if (is_neighbor_eligible(data, left_neighbor, num))
+        {
+            if (all_coders[right_neighbor].last_com_time < all_coders[id].last_com_time)
+                return (0);
+        }
     }
 
     return (1);
 }
-
-int can_i_compile(t_coder_context *all_coders, int id, int num)
+int can_i_compile_fifo(t_coder_context *all_coders, int id, int num)
 {
     t_scheduler *data = all_coders[id].data;
-    int other_left;
-    int other_right;
+    // int other_left;
+    // int other_right;
     int left_dongle = id;
     int right_dongle = (id + 1) % num;
     int left_neighbor = (id + num - 1) % num;
     int right_neighbor = (id + 1) % num;
     if (num == 0)
         return (0);
-    // if (left_dongle == right_dongle)
-    // {
-    //     printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
-    //     return (0);
-    // }
+    if (left_dongle == right_dongle)
+    {
+        printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
+        return (0);
+    }
     if (data->usb[left_dongle] != 1 || data->usb[right_dongle] != 1)
         return (0);
 
     if (all_coders[left_neighbor].is_waiting)
     {
-        if (all_coders[left_neighbor].request_time < all_coders[id].request_time)
-            return (0);
+        if (is_neighbor_eligible(data, left_neighbor, num))
+        {
+            if (all_coders[left_neighbor].request_time < all_coders[id].request_time)
+                return (0);
+        }
     }
 
     if (all_coders[right_neighbor].is_waiting)
     {
-        if (all_coders[right_neighbor].request_time < all_coders[id].request_time)
-            return (0);
+        if (is_neighbor_eligible(data, left_neighbor, num))
+        {
+            if (all_coders[right_neighbor].request_time < all_coders[id].request_time)
+                return (0);
+        }
     }
    
     return (1);
 
 
 
+}
+int can_i_compile(t_coder_context *all_coders, int id, int num)
+{
+    t_scheduler *data = all_coders[id].data;
+
+    if(!(data->is_edf))
+    {
+        return (can_i_compile_fifo(data->cnx_array, id, num));
+    }
+    else
+    {
+        return (can_i_compile_edf(data->cnx_array, id, num));
+    }
 }
 void* ft_coders(void* arg)
 {
@@ -175,9 +223,11 @@ void* ft_coders(void* arg)
         // data->queue[data->tail % num] = id;
         // data->tail = (data->tail + 1) % num;
         ctx->request_time = ft_time();
-        ctx->is_waiting = 1;
         
-        while(!can_i_compile(data->cnx_array, id, num))
+        ctx->is_waiting = 1;
+        ctx->start_cooldown = ft_time();
+        
+        while((ctx->check_cooldown) && !(can_i_compile(data->cnx_array, id, num)))
         {
             pthread_cond_wait(&cond,&lock);
         }
@@ -185,24 +235,26 @@ void* ft_coders(void* arg)
         // heap_pop(&data->heap);
         ctx->is_waiting = 0;
         usb[left] = 0;
-        usb[right] = 0;
-        ctx->last_com_time = ft_time();
         printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
+        usb[right] = 0;
         printf("time: %ld id: %d has taken a right dongle\n",ft_time_opt(data->start_time),id+1);
+        ctx->last_com_time = ft_time();
         printf("time: %ld id: %d is compiling \n",ft_time_opt(data->start_time),id+1);
         pthread_mutex_unlock(&lock);
         // usleep(data->dongle_cooldown *1000);
         // printf("time: %ld id: %d is compiling \n",ft_time_opt(data->start_time),id);
-        usleep(data->time_to_compile * 1000);
+        
+        usleep(data->time_to_compile*1000);
         
         pthread_mutex_lock(&lock);
+        ctx->is_cooldown = 1;
         if (ctx->count_comp < data->number_of_compiles_required)
             ctx->count_comp += 1;
         ctx->last_com_time = ft_time();
         pthread_mutex_unlock(&lock);
         // usleep(data->dongle_cooldown);
-        if (data->dongle_cooldown > 0)
-            usleep(data->dongle_cooldown * 1000);
+        // if (data->dongle_cooldown > 0)
+        //     usleep(data->dongle_cooldown * 1000);
         pthread_mutex_lock(&lock);
         usb[left] = 1;
         usb[right] = 1;
@@ -211,11 +263,11 @@ void* ft_coders(void* arg)
         pthread_mutex_lock(&lock);
         printf("time: %ld id: %d is debugging\n",ft_time_opt(data->start_time),id+1);
         pthread_mutex_unlock(&lock);
-        usleep(data->time_to_debug * 1000);
+        usleep(data->time_to_debug*1000);
         pthread_mutex_lock(&lock);
         printf("time: %ld id: %dis refactoring\n",ft_time_opt(data->start_time),id+1);
         pthread_mutex_unlock(&lock);
-        usleep(data->time_to_refactor * 1000);
+        usleep(data->time_to_refactor*1000);
     }
     
 
@@ -224,8 +276,6 @@ void* ft_coders(void* arg)
 }
 int main_thread(t_scheduler *data)
 {
-    // printf("ddd");
-    // printf("num_coder :%d\n time_burn :%d\n time_to_complier: %d\n  debug :%d\n",data->number_of_coders,data->time_to_burnout,data->time_to_compile,data->time_to_debug,data->time_to_refactor,"\n");
     
     int num;
     int i;
@@ -262,7 +312,10 @@ int main_thread(t_scheduler *data)
         cnx[i].last_com_time = ft_time();
         cnx[i].count_comp = 0;
         cnx[i].is_waiting = 0;
+        cnx[i].is_cooldown = 0;
         cnx[i].request_time = 0;
+        cnx[i].check_cooldown = 1;
+        cnx[i].start_cooldown = 0;
         i+=1;
     }
     i = 0;

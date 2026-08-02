@@ -5,19 +5,9 @@
 #include "header.h"
 
 
-// typedef struct s_scheduler
-// {
-//     int number_of_coders;
-//     long time_to_burnout;
-//     long time_to_compile;
-//     long time_to_debug;
-//     long time_to_refactor;
-//     int number_of_compiles_required;
-// } t_scheduler;
-
-
 long ft_atoi(const char *str)
 {
+
     int sign;
     int i;
     long result;
@@ -37,7 +27,10 @@ long ft_atoi(const char *str)
     while (str[i])
 	{
         if (!(str[i] >= '0' && str[i] <= '9'))
+        {
             return -1;
+        }
+        
         result = result * 10 + (str[i] - '0');
         i++;
     }
@@ -64,7 +57,7 @@ long ft_atoi(const char *str)
 
 void ft_data(t_scheduler *data,char **arg)
 {
-    // printf("it go here\n");
+
     data->number_of_coders = ft_atoi(arg[1]);
     data->time_to_burnout = ft_atoi(arg[2]);
     data->time_to_compile = ft_atoi(arg[3]);
@@ -72,15 +65,22 @@ void ft_data(t_scheduler *data,char **arg)
     data->time_to_refactor = ft_atoi(arg[5]);
     data->number_of_compiles_required = ft_atoi(arg[6]);
     data->dongle_cooldown = ft_atoi(arg[7]);
-    // printf("it go here3\n");
-    // if (strcmp(arg[7], "edf") == 0)
-    // {
-    //     data->is_edf = 1;
-    // }
-    // else
-    // {
-    //     data->is_edf = 0;
-    // }
+    // check edf is correct 
+    if (arg[8] != NULL)
+    {
+        if (strcmp(arg[8], "edf") == 0)
+        {
+            data->is_edf = 1;
+        }
+        else
+        {
+            data->is_edf = 0;
+        }
+    }
+    else
+    {
+        data->is_edf = 0;
+    }
     
 
 }
@@ -105,6 +105,7 @@ int ft_check_parameter(char *arg)
 int main(int arg, char **argc)
 {
     
+    
     if ((arg < 2) || (arg > 8))
     {
         printf("Please enter the argument");
@@ -113,7 +114,7 @@ int main(int arg, char **argc)
     int i = 1, j = 0;
     int boolin, num;
     char *args;
-    while(i < arg)
+    while(i < 8)
     {
         args = strtok(argc[i], " ");
         if (!args)
@@ -126,7 +127,7 @@ int main(int arg, char **argc)
             boolin = syntax_check(&args[j]);
             if (boolin == 0)
             {
-                write(2, "Error\n", 6);
+                printf("Erorr\n");
                 return 1;
             }
             num = ft_atoi(&args[j]);
@@ -144,17 +145,12 @@ int main(int arg, char **argc)
             }
             j++;
         }
-        // if (ft_check_parameter(argc[7]) != 0)
-        // {
-        //     write(2, "Error\n", 6);
-        //     return (1);
-        // }
         i++;
-    }
-    // printf("it go here\n");
+    } 
     t_scheduler data;
     ft_data(&data,argc);
     // printf("4it go here\n");
     main_thread(&data);
     return 0;
 }    
+// if there is n arg 7
