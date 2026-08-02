@@ -9,7 +9,7 @@
 //  mission now :fifo or edf
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-int ft_time()
+long long ft_time()
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -42,7 +42,7 @@ void* ft_check_burnout(void*arg)
             pthread_mutex_lock(&lock);
             if (ft_time() - cnx[i].last_com_time > bournout)
             {
-                printf("time: %ld, id : %d bornout\n",ft_time_opt(cnx[0].data->start_time),cnx[i].id);
+                printf("time: %ld, id : %d bornout\n",ft_time_opt(cnx[0].data->start_time),cnx[i].id+1);
                 exit(0);
             }
             if (cnx[i].count_comp >= cnx[i].data->number_of_compiles_required)
@@ -60,46 +60,80 @@ void* ft_check_burnout(void*arg)
     }
     return NULL;
 }
+int is_neighbor_eligible(t_scheduler *data, int neighbor_id, int num)
+{
+    int neighbor_left_dongle = neighbor_id;
+    int neighbor_right_dongle = (neighbor_id + 1) % num;
 
+    if (data->usb[neighbor_left_dongle] == 1 && data->usb[neighbor_right_dongle] == 1)
+        return (1);
+    return (0); 
+}
+int can_i_compile_edf(t_coder_context *all_coders, int id, int num)
+{
+    t_scheduler *data = all_coders[id].data;
+    int left_dongle = id;
+    int right_dongle = (id + 1) % num;
+
+    int left_neighbor = (id + num - 1) % num;
+    int right_neighbor = (id + 1) % num;
+    // if (num <= 1)
+    //     return (0);
+
+    if (data->usb[left_dongle] != 1 || data->usb[right_dongle] != 1)
+        return (0);
+
+
+  
+    if (all_coders[left_neighbor].is_waiting)
+    {
+        if (is_neighbor_eligible(data, left_neighbor, num))
+        {
+            if (all_coders[left_neighbor].last_com_time < all_coders[id].last_com_time)
+                return (0);
+        }
+    }
+
+    if (all_coders[right_neighbor].is_waiting)
+    {
+        if (all_coders[right_neighbor].last_com_time < all_coders[id].last_com_time)
+            return (0);
+    }
+
+    return (1);
+}
 
 int can_i_compile(t_coder_context *all_coders, int id, int num)
 {
     t_scheduler *data = all_coders[id].data;
     int other_left;
     int other_right;
-    // int left_dongle = (id - 1 + num) % num;
-    int left_dongle = (id +1 )% num;
-    int right_dongle = id % num;
-    printf("now it is left %d, right %d\n",left_dongle,right_dongle);
-    // if (data->usb[left_dongle] == data->usb[right_dongle])
+    int left_dongle = id;
+    int right_dongle = (id + 1) % num;
+    int left_neighbor = (id + num - 1) % num;
+    int right_neighbor = (id + 1) % num;
+    if (num == 0)
+        return (0);
+    // if (left_dongle == right_dongle)
     // {
     //     printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
-    //     return 0;
+    //     return (0);
     // }
     if (data->usb[left_dongle] != 1 || data->usb[right_dongle] != 1)
         return (0);
-    int i = 0;
-    while(i < num)
+
+    if (all_coders[left_neighbor].is_waiting)
     {
-        if (i == id)
-        {
-            i+=1;
-            continue;
-        }
-        if (all_coders[i].is_waiting)
-        {
-            other_left = (i - 1 + num) % num;
-            other_right = i;
-            if (other_left == left_dongle || other_left == right_dongle ||
-                other_right == left_dongle || other_right == right_dongle)
-            {
-                printf("the id that it take left :%d, right :%d\n",other_left,other_right);
-                if (all_coders[i].request_time < all_coders[id].request_time)
-                    return (0); 
-            }
-        }
-        i++;
+        if (all_coders[left_neighbor].request_time < all_coders[id].request_time)
+            return (0);
     }
+
+    if (all_coders[right_neighbor].is_waiting)
+    {
+        if (all_coders[right_neighbor].request_time < all_coders[id].request_time)
+            return (0);
+    }
+   
     return (1);
 
 
@@ -114,12 +148,12 @@ void* ft_coders(void* arg)
     int *usb = data->usb;
 
     int id = ctx->id;
-    printf("here the problem %d\n",id);
-    printf("check id: %d , %d\n",id,num);
+    // printf("here the problem %d\n",id);
+    // printf("check id: %d , %d\n",id,num);
     // printf("id : %d djkfkk\n",id);
     int left = id;
     int right = (id + 1) % num;
-    printf("right %d left %d\n",right,left);
+    // printf("right %d left %d\n",right,left);
     // int i = 0;
     while(1)
     {
@@ -151,30 +185,37 @@ void* ft_coders(void* arg)
         // heap_pop(&data->heap);
         ctx->is_waiting = 0;
         usb[left] = 0;
-        printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id);
         usb[right] = 0;
-        printf("time: %ld id: %d has taken a right dongle\n",ft_time_opt(data->start_time),id);
-        
-        pthread_mutex_unlock(&lock);
-     
-        usleep(data->time_to_compile * 1000);
+        ctx->last_com_time = ft_time();
+        printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
+        printf("time: %ld id: %d has taken a right dongle\n",ft_time_opt(data->start_time),id+1);
         printf("time: %ld id: %d is compiling \n",ft_time_opt(data->start_time),id+1);
+        pthread_mutex_unlock(&lock);
         // usleep(data->dongle_cooldown *1000);
         // printf("time: %ld id: %d is compiling \n",ft_time_opt(data->start_time),id);
+        usleep(data->time_to_compile * 1000);
+        
         pthread_mutex_lock(&lock);
         if (ctx->count_comp < data->number_of_compiles_required)
             ctx->count_comp += 1;
-        
         ctx->last_com_time = ft_time();
+        pthread_mutex_unlock(&lock);
         // usleep(data->dongle_cooldown);
+        if (data->dongle_cooldown > 0)
+            usleep(data->dongle_cooldown * 1000);
+        pthread_mutex_lock(&lock);
         usb[left] = 1;
         usb[right] = 1;
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&lock);
+        pthread_mutex_lock(&lock);
+        printf("time: %ld id: %d is debugging\n",ft_time_opt(data->start_time),id+1);
+        pthread_mutex_unlock(&lock);
         usleep(data->time_to_debug * 1000);
-        printf("time: %ld id: %d is debugging\n",ft_time_opt(data->start_time),id);
+        pthread_mutex_lock(&lock);
+        printf("time: %ld id: %dis refactoring\n",ft_time_opt(data->start_time),id+1);
+        pthread_mutex_unlock(&lock);
         usleep(data->time_to_refactor * 1000);
-        printf("time: %ld id: %dis refactoring\n",ft_time_opt(data->start_time),id);
     }
     
 
@@ -183,14 +224,14 @@ void* ft_coders(void* arg)
 }
 int main_thread(t_scheduler *data)
 {
-    printf("ddd");
+    // printf("ddd");
     // printf("num_coder :%d\n time_burn :%d\n time_to_complier: %d\n  debug :%d\n",data->number_of_coders,data->time_to_burnout,data->time_to_compile,data->time_to_debug,data->time_to_refactor,"\n");
     
     int num;
     int i;
     num = data->number_of_coders;
-    data->usb = malloc(sizeof(int)*num +1);
-    data->queue = malloc(sizeof(int)*num+1);
+    data->usb = malloc(sizeof(int)*num);
+    data->queue = malloc(sizeof(int)*num);
     data->start_time = ft_time();
     // data->head = 0;
     // data->heap.tree = malloc(sizeof(t_heap_node) * data->number_of_coders);
@@ -206,7 +247,7 @@ int main_thread(t_scheduler *data)
     }
     pthread_t coders[num];
     pthread_t monitor_thread;
-    t_coder_context *cnx = malloc(sizeof(t_coder_context) * num +1);
+    t_coder_context *cnx = malloc(sizeof(t_coder_context) * num);
     if (!cnx)
     return (1);
     data->cnx_array = cnx;
@@ -217,21 +258,23 @@ int main_thread(t_scheduler *data)
     while(i < num)
     {
         cnx[i].data = data;
-        cnx[i].id = i+1;
+        cnx[i].id = i;
         cnx[i].last_com_time = ft_time();
         cnx[i].count_comp = 0;
+        cnx[i].is_waiting = 0;
+        cnx[i].request_time = 0;
         i+=1;
     }
     i = 0;
     while (i < num)
     {
-        printf("heere");
+        // printf("heere");
         pthread_create(&coders[i] ,NULL,ft_coders,&cnx[i]);
         i += 1;
     }
     pthread_create(&monitor_thread, NULL, ft_check_burnout, cnx);
     i = 0;
-    while (i <= num)
+    while (i < num)
     {
         pthread_join(coders[i],NULL);
         i += 1;
