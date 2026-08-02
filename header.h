@@ -33,9 +33,7 @@ typedef struct s_coder_context
     long count_comp;
     long  request_time;     
     int  is_waiting;
-    int is_cooldown;
-    long long start_cooldown; 
-    int check_cooldown ;
+    long long last_compile_end;
     
 } t_coder_context;
 int main_thread(t_scheduler *data);

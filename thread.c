@@ -21,6 +21,18 @@ long ft_time_opt(long time)
     time_now = ft_time() - time;
     return time_now;
 }
+void pre_sleep(long long time_in_ms)
+{
+    long long start = ft_time();
+
+    while ((ft_time() - start) < time_in_ms)
+    {
+        if (time_in_ms - (ft_time() - start) > 1)
+            usleep(500); 
+        else
+            usleep(50);
+    }
+}
 void pre_usleep(long long time_to_sleep)
 {
     long long start = ft_time();
@@ -58,15 +70,7 @@ void* ft_check_burnout(void*arg)
                 printf("time: %ld, id : %d bornout\n",ft_time_opt(cnx[0].data->start_time),cnx[i].id+1);
                 exit(0);
             }
-            if ((cnx[i].is_cooldown) && !(ft_time() - cnx[i].start_cooldown < cnx[i].data->dongle_cooldown))
-            {
-                cnx[i].is_cooldown = 0;
-                cnx[i].check_cooldown = 1;
-            }
-            else
-            {
-                cnx[i].check_cooldown = 0;
-            }
+            
             if (cnx[i].count_comp >= cnx[i].data->number_of_compiles_required)
                 full_coders++;
             pthread_mutex_unlock(&lock);
@@ -123,7 +127,7 @@ int can_i_compile_edf(t_coder_context *all_coders, int id, int num)
 
     if (all_coders[right_neighbor].is_waiting)
     {
-        if (is_neighbor_eligible(data, left_neighbor, num))
+        if (is_neighbor_eligible(data, right_neighbor, num))
         {
             if (all_coders[right_neighbor].last_com_time < all_coders[id].last_com_time)
                 return (0);
@@ -162,7 +166,9 @@ int can_i_compile_fifo(t_coder_context *all_coders, int id, int num)
 
     if (all_coders[right_neighbor].is_waiting)
     {
-        if (is_neighbor_eligible(data, left_neighbor, num))
+        if (ft_time() - all_coders[id].last_compile_end < data->dongle_cooldown)
+        return (0);
+        if (is_neighbor_eligible(data, right_neighbor, num))
         {
             if (all_coders[right_neighbor].request_time < all_coders[id].request_time)
                 return (0);
@@ -225,9 +231,7 @@ void* ft_coders(void* arg)
         ctx->request_time = ft_time();
         
         ctx->is_waiting = 1;
-        ctx->start_cooldown = ft_time();
-        
-        while((ctx->check_cooldown) && !(can_i_compile(data->cnx_array, id, num)))
+        while(!(can_i_compile(data->cnx_array, id, num)))
         {
             pthread_cond_wait(&cond,&lock);
         }
@@ -247,7 +251,7 @@ void* ft_coders(void* arg)
         usleep(data->time_to_compile*1000);
         
         pthread_mutex_lock(&lock);
-        ctx->is_cooldown = 1;
+        
         if (ctx->count_comp < data->number_of_compiles_required)
             ctx->count_comp += 1;
         ctx->last_com_time = ft_time();
@@ -258,6 +262,7 @@ void* ft_coders(void* arg)
         pthread_mutex_lock(&lock);
         usb[left] = 1;
         usb[right] = 1;
+        ctx->last_compile_end = ft_time();
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&lock);
         pthread_mutex_lock(&lock);
@@ -312,10 +317,7 @@ int main_thread(t_scheduler *data)
         cnx[i].last_com_time = ft_time();
         cnx[i].count_comp = 0;
         cnx[i].is_waiting = 0;
-        cnx[i].is_cooldown = 0;
-        cnx[i].request_time = 0;
-        cnx[i].check_cooldown = 1;
-        cnx[i].start_cooldown = 0;
+        cnx[i].last_compile_end=0;
         i+=1;
     }
     i = 0;
