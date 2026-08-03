@@ -202,7 +202,7 @@ int can_i_compile(t_coder_context *all_coders, int id, int num)
     {
         printf("print it come here time now %ld\n",ft_time_opt(ft_time() - all_coders[id].last_compile_end));
 
-        cnx[i].in_use = 0;
+        all_coders[id].in_use = 0;
         pthread_cond_broadcast(&data->cond);
 
     }
