@@ -1,6 +1,11 @@
 #ifndef HEADER_H
 #define HEADER_H
 #include <pthread.h>
+#include <string.h>
+#include <stdio.h>
+# include <unistd.h>
+#include <stdlib.h>
+#include <limits.h>
 typedef struct s_scheduler
 {
     int number_of_coders;
@@ -13,15 +18,16 @@ typedef struct s_scheduler
     int is_edf;
     int *turn;
     int tail;
-    int head;
+    long long start;
     int *usb;
     int *queue;
-    long start_time;
-    pthread_mutex_t log_lock;
-    // pthread_mutex_t lock;              //  g_lock
-    // pthread_mutex_t log_lock;          //  log_lock
-    // pthread_cond_t  cond;              //  g_cond
-    // long            sequence_counter;  //  g_sequence_counter
+    long long start_time;
+    
+    pthread_mutex_t lock;     
+    pthread_mutex_t p_print;        
+    pthread_mutex_t log_lock;        
+    pthread_cond_t  cond;              
+   
     struct s_coder_context *cnx_array;
 } t_scheduler;
 
@@ -33,6 +39,7 @@ typedef struct s_coder_context
     long count_comp;
     long  request_time;     
     int  is_waiting;
+    int in_use;
     long long last_compile_end;
     
 } t_coder_context;
