@@ -57,11 +57,15 @@ void* ft_check_burnout(void*arg)
             {
                 printf("time: %ld, id : %d bornout\n",ft_time_opt(cnx[0].data->start_time),cnx[i].id+1);
                 pthread_mutex_unlock(&data->lock);
-                return NULL;
+                // return NULL;
+                exit(0);
             }
-            if (ft_time() - cnx[i].last_compile_end >= data->dongle_cooldown && !(cnx[i].in_use))
+            printf("from now what it is cnx[i].in_use:%d\n",cnx[i].in_use);
+            if (ft_time() - cnx[i].last_compile_end >= data->dongle_cooldown && cnx[i].in_use)
             {
-                cnx[i].in_use = 1;
+                printf("print it come here time now %ld\n",ft_time_opt(ft_time() - cnx[i].last_compile_end));
+
+                cnx[i].in_use = 0;
                 pthread_cond_broadcast(&data->cond);
  
             }
@@ -75,7 +79,8 @@ void* ft_check_burnout(void*arg)
         if (full_coders == num) {
             printf("time: %ld, All required compiles successfully!\n",ft_time_opt(cnx[0].data->start_time));
             pthread_mutex_unlock(&data->lock);
-            return NULL; 
+            // return NULL;
+            exit(0); 
         }
         pthread_mutex_unlock(&data->lock);
         usleep(500);
@@ -95,9 +100,10 @@ int is_neighbor_eligible(t_scheduler *data, int neighbor_id, int num)
 int can_i_compile_edf(t_coder_context *all_coders, int id, int num)
 {
     t_scheduler *data = all_coders[id].data;
-    int left_dongle = id;
+    int left_dongle = id%num;
     int right_dongle = (id + 1) % num;
-
+    printf("here the problem logic left %d, right %d \n",data->usb[left_dongle] , data->usb[right_dongle]);
+    
     int left_neighbor = (id + num - 1) % num;
     int right_neighbor = (id + 1) % num;
     
@@ -106,30 +112,45 @@ int can_i_compile_edf(t_coder_context *all_coders, int id, int num)
         printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
         return (0);
     }
-
+    // if (data->usb[left_dongle]== data->usb[right_dongle])
+    // {
+    //     printf("id form now :%d , id left %d , right id %d \n",id ,data->usb[left_dongle],data->usb[right_dongle]);
+    //     printf("it see it some thing\n");
+    //     return 0;
+    // }
     if (data->usb[left_dongle] != 1 || data->usb[right_dongle] != 1)
+    {
+
+        printf("here the problem \n");
         return (0);
-
-
-  
-    if (all_coders[left_neighbor].is_waiting)
+    }
+    
+    // if (data->usb[left_dongle])
+    if (left_neighbor != right_neighbor)
     {
-        if (is_neighbor_eligible(data, left_neighbor, num))
+        if (!(all_coders[left_neighbor].in_use) &&  all_coders[left_neighbor].is_waiting)
         {
-            if (all_coders[left_neighbor].last_com_time < all_coders[id].last_com_time)
+            if (is_neighbor_eligible(data, left_neighbor, num))
+            {
+                printf("it check this condition also this left neighbor :%d\n",all_coders[left_neighbor].in_use);
+                if (all_coders[left_neighbor].last_com_time < all_coders[id].last_com_time)
                 return (0);
+            }
+        }
+        
+        if (!(all_coders[right_neighbor].in_use) && all_coders[right_neighbor].is_waiting)
+        {
+            printf("it check this condition also this left neighbor :%d\n",all_coders[right_neighbor].in_use);
+            if (is_neighbor_eligible(data, right_neighbor, num))
+            {
+                if (all_coders[right_neighbor].last_com_time < all_coders[id].last_com_time)
+                return (0);
+            }
         }
     }
-
-    if (all_coders[right_neighbor].is_waiting)
-    {
-        if (is_neighbor_eligible(data, right_neighbor, num))
-        {
-            if (all_coders[right_neighbor].last_com_time < all_coders[id].last_com_time)
-                return (0);
-        }
-    }
-
+    printf("id form now :%d , id left %d , right id %d",id ,data->usb[left_dongle],data->usb[right_dongle]);
+    printf("it for the right  neighbor %d, for the left neighbor :%d for whait right %d, left wait %d id left:%d id right :%d \n",(all_coders[left_neighbor].in_use),(all_coders[right_neighbor].in_use),all_coders[right_neighbor].is_waiting,all_coders[left_neighbor].is_waiting,all_coders[left_neighbor].in_use,all_coders[right_neighbor].in_use);
+    printf("left_nighbor id :%d, right_nieghbor id : %d\n",left_neighbor,right_neighbor);
     return (1);
 }
 int can_i_compile_fifo(t_coder_context *all_coders, int id, int num)
@@ -151,7 +172,7 @@ int can_i_compile_fifo(t_coder_context *all_coders, int id, int num)
     if (data->usb[left_dongle] != 1 || data->usb[right_dongle] != 1)
         return (0);
 
-    if (all_coders[left_neighbor].is_waiting)
+    if (!(all_coders[left_neighbor].in_use) && all_coders[left_neighbor].is_waiting)
     {
         if (is_neighbor_eligible(data, left_neighbor, num))
         {
@@ -160,7 +181,7 @@ int can_i_compile_fifo(t_coder_context *all_coders, int id, int num)
         }
     }
 
-    if (all_coders[right_neighbor].is_waiting)
+    if (!(all_coders[right_neighbor].in_use) && all_coders[right_neighbor].is_waiting)
     {
         if (is_neighbor_eligible(data, right_neighbor, num))
         {
@@ -177,7 +198,16 @@ int can_i_compile_fifo(t_coder_context *all_coders, int id, int num)
 int can_i_compile(t_coder_context *all_coders, int id, int num)
 {
     t_scheduler *data = all_coders[id].data;
-    // all_coders[id].in_use = 1;
+    if (ft_time() - all_coders[id].last_compile_end >= data->dongle_cooldown && all_coders[id].in_use)
+    {
+        printf("print it come here time now %ld\n",ft_time_opt(ft_time() - all_coders[id].last_compile_end));
+
+        cnx[i].in_use = 0;
+        pthread_cond_broadcast(&data->cond);
+
+    }
+    if (all_coders[id].in_use)
+        return 0;
     if(!(data->is_edf))
     {
         return (can_i_compile_fifo(data->cnx_array, id, num));
@@ -196,13 +226,8 @@ void* ft_coders(void* arg)
     int *usb = data->usb;
 
     int id = ctx->id;
-    // printf("here the problem %d\n",id);
-    // printf("check id: %d , %d\n",id,num);
-    // printf("id : %d djkfkk\n",id);
     int left = id;
     int right = (id + 1) % num;
-    // printf("right %d left %d\n",right,left);
-    // int i = 0;
     while(1)
     {
         // printf("here we go\n");
@@ -217,18 +242,15 @@ void* ft_coders(void* arg)
             continue; 
         }
         
-        // long req_time = ft_time();
-        // heap_push(&data->heap, id, req_time);
-        
-        // data->queue[data->tail % num] = id;
-        // data->tail = (data->tail + 1) % num;
+   
         if (!ctx->is_waiting)
         {
             ctx->request_time = ft_time();
             ctx->is_waiting = 1;
         }        
-        while(!(ctx->in_use) || !(can_i_compile(data->cnx_array, id, num)))
+        while(ctx->in_use || !(can_i_compile(data->cnx_array, id, num)))
         {
+            // printf("id cond wait %d\n)
             pthread_cond_wait(&data->cond,&data->lock);
         }
         
@@ -257,7 +279,7 @@ void* ft_coders(void* arg)
         usb[left] = 1;
         usb[right] = 1;
         ctx->last_compile_end = ft_time();
-        ctx->in_use = 0;
+        ctx->in_use = 1;
         pthread_cond_broadcast(&data->cond);
         pthread_mutex_unlock(&data->lock);
 
@@ -268,7 +290,7 @@ void* ft_coders(void* arg)
         pre_sleep(data->time_to_debug);
 
         pthread_mutex_lock(&data->p_print);
-        printf("time: %ld id: %dis refactoring\n",ft_time_opt(data->start_time),id+1);
+        printf("time: %ld id: %d is refactoring\n",ft_time_opt(data->start_time),id+1);
         pthread_mutex_unlock(&data->p_print);
         pre_sleep(data->time_to_refactor);
     }
