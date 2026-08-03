@@ -18,11 +18,13 @@ typedef struct s_scheduler
     int is_edf;
     int *turn;
     int tail;
+    int stop;
     long long start;
     int *usb;
     int *queue;
     long long start_time;
-    
+
+    long long *usb_last_release;
     pthread_mutex_t lock;     
     pthread_mutex_t p_print;        
     pthread_mutex_t log_lock;        
@@ -39,8 +41,7 @@ typedef struct s_coder_context
     long count_comp;
     long  request_time;     
     int  is_waiting;
-    int in_use;
-    long long last_compile_end;
+
     
 } t_coder_context;
 int main_thread(t_scheduler *data);
