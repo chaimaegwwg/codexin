@@ -33,7 +33,7 @@ char *ft_lower(char *str)
     return str;
     
 }
-void ft_data(t_scheduler *data,char **arg)
+int ft_data(t_scheduler *data,char **arg)
 {
     char *str;
     data->number_of_coders = atoi(arg[1]);
@@ -47,11 +47,15 @@ void ft_data(t_scheduler *data,char **arg)
     if (strcmp(str, "edf") == 0)
     {
         data->is_edf = 1;
+        return 1;
     }
-    else
+    if (strcmp(str, "fifo") == 0)
     {
         data->is_edf = 0;
+        return 1;
     }
+    return 0;
+    
     
 
 }
@@ -68,6 +72,7 @@ int main(int arg, char **argc)
     int j = 1;
     long num;
     int boolin;
+    int n=0;
 
     while(j < 7)
     {
@@ -96,7 +101,12 @@ int main(int arg, char **argc)
    
     
     t_scheduler data;
-    ft_data(&data,argc);
+    n = ft_data(&data,argc);
+    if(!n)
+    {
+        printf("Error on the name of the parameter\n");
+        return 1;
+    }
     // printf("4it go here\n");
     main_thread(&data);
     return 0;

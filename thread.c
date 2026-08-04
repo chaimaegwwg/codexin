@@ -20,12 +20,19 @@ long ft_time_opt(long long time)
     time_now = ft_time() - time;
     return time_now;
 }
-void pre_sleep(long long time_in_ms)
+void pre_sleep(long long time_in_ms, t_scheduler *data)
 {
     long long start = ft_time();
 
     while ((ft_time() - start) < time_in_ms)
     {
+        pthread_mutex_lock(&data->lock);
+        if (data->stop)
+        {
+            pthread_mutex_unlock(&data->lock);
+            return;
+        }
+        pthread_mutex_unlock(&data->lock);
         if (time_in_ms - (ft_time() - start) > 1)
             usleep(500); 
         else
@@ -55,13 +62,14 @@ void* ft_check_burnout(void*arg)
             // printf("here the proble\n");
             if (ft_time() - cnx[i].last_com_time > bournout)
             {
-                printf("time: %ld, id : %d bornout\n",ft_time_opt(cnx[0].data->start_time),cnx[i].id+1);
-                
                 data->stop = 1;
                 pthread_cond_broadcast(&data->cond);
                 pthread_mutex_unlock(&data->lock);
+                
+                pthread_mutex_lock(&data->p_print);
+                printf("time: %ld, id : %d bornout\n",ft_time_opt(cnx[0].data->start_time),cnx[i].id+1);
+                pthread_mutex_unlock(&data->p_print);
                 return (NULL);
-                // exit(0);
             }
             if (!data->cooldown_notified[i] && ft_time() - data->usb_last_release[i] >= data->dongle_cooldown)
             {
@@ -76,10 +84,13 @@ void* ft_check_burnout(void*arg)
         }
         pthread_mutex_lock(&data->lock);
         if (full_coders == num) {
-            printf("time: %ld, All required compiles successfully!\n",ft_time_opt(cnx[0].data->start_time));
             data->stop = 1;
             pthread_cond_broadcast(&data->cond);
             pthread_mutex_unlock(&data->lock);
+            
+            pthread_mutex_lock(&data->p_print);
+            printf("time: %ld, All required compiles successfully!\n",ft_time_opt(cnx[0].data->start_time));
+            pthread_mutex_unlock(&data->p_print);
             return (NULL);
             // exit(0); 
         }
@@ -112,6 +123,7 @@ int can_i_compile_edf(t_coder_context *all_coders, int id, int num)
     {
         data->usb[left_dongle] = 1;
         printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
+        data->stop = 1;
         return (0);
     }
     if (ft_time() - data->usb_last_release[left_dongle] < data->dongle_cooldown)
@@ -164,6 +176,7 @@ int can_i_compile_fifo(t_coder_context *all_coders, int id, int num)
     {
         data->usb[left_dongle] = 1;
         printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
+        data->stop = 1;
         return (0);
     }
     if (data->usb[left_dongle] != 1 || data->usb[right_dongle] != 1)
@@ -200,14 +213,16 @@ int can_i_compile_fifo(t_coder_context *all_coders, int id, int num)
 int can_i_compile(t_coder_context *all_coders, int id, int num)
 {
     t_scheduler *data = all_coders[id].data;
-    if(!(data->is_edf))
+    if(data->is_edf == 0)
     {
         return (can_i_compile_fifo(data->cnx_array, id, num));
     }
-    else
+    else if((data->is_edf) == 1)
     {
         return (can_i_compile_edf(data->cnx_array, id, num));
     }
+    return 0;
+
 }
 void* ft_coders(void* arg)
 {
@@ -261,16 +276,17 @@ void* ft_coders(void* arg)
         
         ctx->is_waiting = 0;
         usb[left] = 0;
-        printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
         usb[right] = 0;
-        printf("time: %ld id: %d has taken a right dongle\n",ft_time_opt(data->start_time),id+1);
         ctx->last_com_time = ft_time();
-        printf("time: %ld id: %d is compiling \n",ft_time_opt(data->start_time),id+1);
         pthread_mutex_unlock(&data->lock);
-        // usleep(data->dongle_cooldown *1000);
-        // printf("time: %ld id: %d is compiling \n",ft_time_opt(data->start_time),id);
         
-        pre_sleep(data->time_to_compile);
+        pthread_mutex_lock(&data->p_print);
+        printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
+        printf("time: %ld id: %d has taken a right dongle\n",ft_time_opt(data->start_time),id+1);
+        printf("time: %ld id: %d is compiling \n",ft_time_opt(data->start_time),id+1);
+        pthread_mutex_unlock(&data->p_print);
+        
+        pre_sleep(data->time_to_compile, data);
         
         pthread_mutex_lock(&data->lock);
         
@@ -279,9 +295,7 @@ void* ft_coders(void* arg)
         // ctx->last_com_time = ft_time();
         ctx->last_com_time = ft_time();
 
-        pthread_mutex_unlock(&data->lock);
         
-        pthread_mutex_lock(&data->lock);
         usb[left] = 1;
         usb[right] = 1;
         data->usb_last_release[left] = ft_time();
@@ -293,16 +307,33 @@ void* ft_coders(void* arg)
         pthread_cond_broadcast(&data->cond);
         pthread_mutex_unlock(&data->lock);
 
+        pthread_mutex_lock(&data->lock);
+        if (data->stop)
+        {
+            pthread_mutex_unlock(&data->lock);
+            return NULL;
+        }
+        pthread_mutex_unlock(&data->lock);
+
         pthread_mutex_lock(&data->p_print);
         printf("time: %ld id: %d is debugging\n",ft_time_opt(data->start_time),id+1);
         pthread_mutex_unlock(&data->p_print);
         
-        pre_sleep(data->time_to_debug);
-
+        pre_sleep(data->time_to_debug, data);
+        
+        pthread_mutex_lock(&data->lock);
+        if (data->stop)
+        {
+            pthread_mutex_unlock(&data->lock);
+            return NULL;
+        }
+        pthread_mutex_unlock(&data->lock);
+        
         pthread_mutex_lock(&data->p_print);
         printf("time: %ld id: %d is refactoring\n",ft_time_opt(data->start_time),id+1);
         pthread_mutex_unlock(&data->p_print);
-        pre_sleep(data->time_to_refactor);
+        
+        pre_sleep(data->time_to_refactor,data);
     }
     
 
