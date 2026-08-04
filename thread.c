@@ -63,8 +63,9 @@ void* ft_check_burnout(void*arg)
                 return (NULL);
                 // exit(0);
             }
-            if (ft_time() - data->usb_last_release[i] >= data->dongle_cooldown)
+            if (!data->cooldown_notified[i] && ft_time() - data->usb_last_release[i] >= data->dongle_cooldown)
             {
+                data->cooldown_notified[i] = 1;
                 pthread_cond_broadcast(&data->cond);
             }
             
@@ -227,7 +228,11 @@ void* ft_coders(void* arg)
         // {
         if (ctx->count_comp >= data->number_of_compiles_required)
         {
-            ctx->last_com_time = ft_time(); 
+            if (data->stop)
+            {
+                pthread_mutex_unlock(&data->lock);
+                return (NULL);
+            }
             pthread_mutex_unlock(&data->lock);
             usleep(500); 
             continue; 
@@ -248,8 +253,12 @@ void* ft_coders(void* arg)
             }
             pthread_cond_wait(&data->cond,&data->lock);
         }
+        if (data->stop)
+        {
+            pthread_mutex_unlock(&data->lock);
+            return (NULL);
+        }
         
-        // heap_pop(&data->heap);
         ctx->is_waiting = 0;
         usb[left] = 0;
         printf("time: %ld id: %d has taken a left dongle\n",ft_time_opt(data->start_time),id+1);
@@ -276,7 +285,11 @@ void* ft_coders(void* arg)
         usb[left] = 1;
         usb[right] = 1;
         data->usb_last_release[left] = ft_time();
+        data->cooldown_notified[left] = 0;
+
         data->usb_last_release[right] = ft_time();
+        data->cooldown_notified[right] = 0;
+
         pthread_cond_broadcast(&data->cond);
         pthread_mutex_unlock(&data->lock);
 
@@ -301,18 +314,24 @@ int main_thread(t_scheduler *data)
     
     int num;
     int i;
+    pthread_t monitor_thread;
     num = data->number_of_coders;
+    t_coder_context *cnx = malloc(sizeof(t_coder_context) * num);
+    pthread_t coders[num];
     data->stop = 0;
     data->usb = malloc(sizeof(int)*num);
     data->queue = malloc(sizeof(int)*num);
     data->start_time = ft_time();
-    // pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-    // pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+    data->cooldown_notified = malloc(sizeof(int) * num);
+    data->usb_last_release = malloc(sizeof(long long) * num);
+    if (!cnx)
+    return (1);
+    if (!data->usb || !data->queue || !data->usb_last_release|| !data->cooldown_notified)
+    return (1);
     pthread_mutex_init(&data->log_lock, NULL);
     pthread_mutex_init(&data->lock, NULL);
     pthread_mutex_init(&data->p_print, NULL);
     pthread_cond_init(&data->cond, NULL);
-    data->usb_last_release = malloc(sizeof(long long) * num);
     i = 0;
     // printf("%d\n",num);
     while(i < num)
@@ -320,13 +339,9 @@ int main_thread(t_scheduler *data)
         data->queue[i] = 0;
         data->usb[i] = 1;
         data->usb_last_release[i] = ft_time() - data->dongle_cooldown;
+        data->cooldown_notified[i] = 1;
         i +=1;
     }
-    pthread_t coders[num];
-    pthread_t monitor_thread;
-    t_coder_context *cnx = malloc(sizeof(t_coder_context) * num);
-    if (!cnx)
-    return (1);
     data->cnx_array = cnx;
     data->tail = 0;
     
@@ -355,10 +370,16 @@ int main_thread(t_scheduler *data)
         pthread_join(coders[i],NULL);
         i += 1;
     }
+    pthread_join(monitor_thread, NULL);
     free(cnx);
     free(data->usb);
     free(data->queue);
     free(data->usb_last_release);
-
+    free(data->cooldown_notified);
+    pthread_mutex_destroy(&data->lock);
+    pthread_mutex_destroy(&data->p_print);
+    pthread_mutex_destroy(&data->log_lock);
+    pthread_cond_destroy(&data->cond);
     return 0;
 }
+// destroy w null and join

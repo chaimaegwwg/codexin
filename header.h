@@ -25,6 +25,7 @@ typedef struct s_scheduler
     long long start_time;
 
     long long *usb_last_release;
+    int *cooldown_notified;
     pthread_mutex_t lock;     
     pthread_mutex_t p_print;        
     pthread_mutex_t log_lock;        
